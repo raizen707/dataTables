@@ -1,0 +1,104 @@
+﻿using DemoDatatables.Models;
+using System;
+using System.Linq;
+using System.Web.Mvc;
+using System.Linq.Dynamic;
+using System.Data.Entity;
+
+namespace DemoDatatables.Controllers
+{
+    public class DemoController : Controller
+    {
+        // GET: Demo
+        public ActionResult ShowGrid()
+        {
+            return View();
+        }
+
+        public ActionResult LoadData()
+        {
+            try
+            {
+                //Creando una instancia de la clase DatabaseContext
+                using (DatabaseContext _context = new DatabaseContext())
+                {
+                    var draw = Request.Form.GetValues("draw").FirstOrDefault();
+                    var start = Request.Form.GetValues("start").FirstOrDefault();
+                    var length = Request.Form.GetValues("length").FirstOrDefault();
+                    var sortColumn = Request.Form.GetValues("columns[" + Request.Form.GetValues("order[0][column]").FirstOrDefault() + "][name]").FirstOrDefault();
+                    var sortColumnDir = Request.Form.GetValues("order[0][dir]").FirstOrDefault();
+                    var searchValue = Request.Form.GetValues("search[value]").FirstOrDefault();
+
+                    
+                    //Paginear (10,20,50,100)
+                    int pageSize = length != null ? Convert.ToInt32(length) : 0;
+                    int skip = start != null ? Convert.ToInt32(start) : 0;
+                    int recordsTotal = 0;
+                    //Obteniendo toda la data
+                    var customerData = (from tempcustomer in _context.Customers
+                                        select tempcustomer);
+                    //Ordenando
+                    if (!(string.IsNullOrEmpty(sortColumn) && string.IsNullOrEmpty(sortColumnDir)))
+                    {
+                        customerData = customerData.OrderBy(sortColumn + " " + sortColumnDir);
+                    }
+
+                    //Busqueda
+                    if (!string.IsNullOrEmpty(searchValue))
+                    {
+                        customerData = customerData.Where(m => m.CompanyName == searchValue
+                        || m.ContactName == searchValue || m.Country == searchValue);
+                    }
+                    //Total de filas a retornar
+                    recordsTotal = customerData.Count();
+                    //Pagineo
+                    var data = customerData.Skip(skip).Take(pageSize).ToList();
+                    //Retornando la informacion en json
+                    return Json(new { draw = draw, recordsFiltered = recordsTotal, recordsTotal = recordsTotal, data = data });
+                }
+            }
+            catch (Exception)
+            {
+                throw;
+            }
+
+        }
+
+        [HttpGet]
+        public ActionResult Edit(int? ID)
+        {
+            try
+            {
+                using (DatabaseContext _context = new DatabaseContext())
+                {
+                    var Customer = (from customer in _context.Customers
+                                    where customer.CustomerID == ID
+                                    select customer).FirstOrDefault();
+
+                    return View(Customer);
+                }
+            }
+            catch (Exception)
+            {
+                throw;
+            }
+        }
+
+
+        [HttpPost]
+        public JsonResult DeleteCustomer(int? ID)
+        {
+            using (DatabaseContext _context = new DatabaseContext())
+            {
+                var customer = _context.Customers.Find(ID);
+                if (ID == null)
+                    return Json(data: "NO Eliminado", behavior: JsonRequestBehavior.AllowGet);
+                _context.Customers.Remove(customer);
+                _context.SaveChanges();
+
+                return Json(data: "Eliminado", behavior: JsonRequestBehavior.AllowGet);
+            }
+        }
+
+    }
+}
